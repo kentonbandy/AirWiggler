@@ -114,9 +114,6 @@ func noCacheFS(h http.Handler) http.Handler {
 	})
 }
 
-	return securityHeaders(tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux))
-}
-
 // handleConfig serves GET /api/config — exposes runtime config to the frontend.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
