@@ -1,10 +1,10 @@
 # AirWiggler
 
-A self-hosted music library and player in a single Docker container. Point it at a folder of music, open a browser, and play. Supports hosting multiple levels of quality so users can select the best option for their connection. Minimal configuration required.
+Do you love it when air wiggles your ear bones? Are you sick of free hosting solutions that bombard your friends and family with ads? Have you spent way too much time and money on a home server? I may not be able to provide the therapy you need, but I can provide this app!
+
+AirWiggler is a self-hosted music library and player in a single Docker container. Point it at a folder of music, open a browser, and play. Supports hosting multiple levels of quality so users can select the best option for their connection. Minimal configuration required.
 
 Designed for home servers running [Unraid](https://unraid.net/), but works with any container runtime that can pull from Docker Hub.
-
-This app was built to make it easy to share audio with others without subjecting them to the pervasive ads on most free platforms.
 
 ---
 
@@ -36,6 +36,8 @@ Every direct subfolder of `/music` is treated as one album or collection. Beyond
 **Single quality** — if you only have one version, you can skip subfolders entirely and place music files directly in the album folder.
 
 **Mixed** — if music files exist at the album root alongside subfolders, the root-level files are grouped under a `root` button.
+
+**Supported audio formats** — .flac, .mp3, .wav, .m4a, .aac, .ogg, .opus, .aif, .aiff
 
 **Cover art** — `cover.jpg` (or `folder.jpg` / `cover.png`) in the album folder is used as the album art. Additional images in the folder are also viewable. Embedded art in the first audio track is used as a fallback.
 
