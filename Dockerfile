@@ -9,7 +9,8 @@ RUN go mod download
 
 # Copy source and build a static binary
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o airwiggler .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION}" -o airwiggler .
 
 # ── Final stage ───────────────────────────────────────────────────────────────
 FROM scratch

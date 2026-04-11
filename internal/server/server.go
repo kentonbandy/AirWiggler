@@ -19,6 +19,7 @@ type Server struct {
 	webFS          fs.FS
 	siteTitle      string
 	defaultQuality string
+	version        string
 	accessToken    string
 	cookieSecure   bool
 
@@ -40,6 +41,7 @@ type Config struct {
 	Port                  string
 	SiteTitle             string
 	DefaultQuality        string
+	Version               string
 	MusicDir              string
 	AccessToken           string
 	NotifyURL             string
@@ -57,6 +59,7 @@ func New(cfg Config, webFS fs.FS) *Server {
 		webFS:               webFS,
 		siteTitle:           cfg.SiteTitle,
 		defaultQuality:      cfg.DefaultQuality,
+		version:             cfg.Version,
 		accessToken:         cfg.AccessToken,
 		cookieSecure:        cfg.CookieSecure,
 		notifier:            newNotifier(cfg.NotifyURL),
@@ -124,9 +127,11 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(struct {
 		SiteTitle      string `json:"siteTitle"`
 		DefaultQuality string `json:"defaultQuality"`
+		Version        string `json:"version"`
 	}{
 		SiteTitle:      s.siteTitle,
 		DefaultQuality: s.defaultQuality,
+		Version:        s.version,
 	})
 }
 

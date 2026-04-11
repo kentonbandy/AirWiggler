@@ -16,6 +16,9 @@ import (
 //go:embed web
 var webFiles embed.FS
 
+// version is stamped at build time via -ldflags "-X main.version=<tag>".
+var version = "dev"
+
 func main() {
 	loadDotEnv(".env")
 
@@ -24,6 +27,7 @@ func main() {
 		SiteTitle:             envOr("SITE_TITLE", "My Music Library"),
 		DefaultQuality:        envOr("DEFAULT_QUALITY", "high"),
 		MusicDir:              envOr("MUSIC_DIR", "/music"),
+		Version:               version,
 		AccessToken:           os.Getenv("ACCESS_TOKEN"),
 		NotifyURL:             os.Getenv("NOTIFY_URL"),
 		BruteForceThreshold:   envInt("NOTIFY_BRUTE_FORCE_THRESHOLD", 20),

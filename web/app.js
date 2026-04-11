@@ -24,6 +24,13 @@ const albumCardMap = new Map(); // albumId → card DOM element
     document.title = cfg.siteTitle;
     currentQuality = cfg.defaultQuality || 'medium';
     viewQuality = currentQuality;
+
+    // Bust Cloudflare/CDN cache for versioned assets
+    if (cfg.version && cfg.version !== 'dev') {
+      const v = encodeURIComponent(cfg.version);
+      document.querySelector('link[href="style.css"]')?.setAttribute('href', `style.css?v=${v}`);
+      document.querySelector('script[src="app.js"]')?.setAttribute('src', `app.js?v=${v}`);
+    }
   } catch (e) {
     console.warn('Could not load config:', e);
   }
