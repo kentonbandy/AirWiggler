@@ -1,28 +1,18 @@
 package scanner
 
 import (
-	"io"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
-	"unicode"
 
 	"github.com/dhowden/tag"
-	flaclib "github.com/mewkiz/flac"
-	"github.com/tcolgate/mp3"
 
 	"github.com/kento/airwiggler/internal/model"
 )
 
-// rootArtNames are checked in order in the album root directory.
-var rootArtNames = []string{"cover.jpg", "folder.jpg", "cover.png"}
-
-// Scan walks musicDir and builds a Library. Albums with no recognized quality
-// folders are silently skipped.
+// Scan walks musicDir and builds a Library. Albums with no audio are skipped.
 func Scan(musicDir string) (*model.Library, error) {
 	entries, err := os.ReadDir(musicDir)
 	if err != nil {
@@ -60,7 +50,6 @@ func scanAlbum(musicDir, folderName string) (*model.Album, error) {
 		return nil, err
 	}
 
-	// Collect subdirectory names (used for quality scanning and art resolution).
 	var subDirs []string
 	for _, e := range entries {
 		if e.IsDir() {
@@ -70,7 +59,7 @@ func scanAlbum(musicDir, folderName string) (*model.Album, error) {
 
 	var firstAudioPath string
 
-	// Scan audio files directly in the album root as the "root" quality.
+	// Audio files directly in the album root become the "root" quality.
 	rootTracks, rootFirst, err := scanTracks(musicDir, albumDir)
 	if err == nil && len(rootTracks) > 0 {
 		album.Qualities["root"] = model.Quality{Tracks: rootTracks}
@@ -78,7 +67,7 @@ func scanAlbum(musicDir, folderName string) (*model.Album, error) {
 		firstAudioPath = rootFirst
 	}
 
-	// Scan each subdirectory as a named quality (in os.ReadDir alphabetical order).
+	// Each subdirectory becomes a named quality (alphabetical order).
 	for _, dir := range subDirs {
 		qDir := filepath.Join(albumDir, dir)
 		tracks, first, scanErr := scanTracks(musicDir, qDir)
@@ -107,9 +96,7 @@ func scanAlbum(musicDir, folderName string) (*model.Album, error) {
 		}
 	}
 
-	// Additional images in the album root (cover.* first, then all others).
 	album.Images = collectAllImages(musicDir, albumDir)
-
 	return album, nil
 }
 
@@ -124,8 +111,7 @@ func scanTracks(musicDir, qualityDir string) (tracks []model.Track, firstPath st
 		if e.IsDir() {
 			continue
 		}
-		lower := strings.ToLower(e.Name())
-		if strings.HasSuffix(lower, ".flac") || strings.HasSuffix(lower, ".mp3") {
+		if isAudioFile(strings.ToLower(e.Name())) {
 			filenames = append(filenames, e.Name())
 		}
 	}
@@ -150,162 +136,12 @@ func scanTracks(musicDir, qualityDir string) (tracks []model.Track, firstPath st
 }
 
 func readMetadata(path string) (title string, duration float64) {
-	// Title via dhowden/tag (handles both Vorbis comments and ID3).
 	if f, err := os.Open(path); err == nil {
 		if m, err := tag.ReadFrom(f); err == nil {
 			title = m.Title()
 		}
 		f.Close()
 	}
-
-	// Duration via format-specific parser.
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".flac":
-		duration = flacDuration(path)
-	case ".mp3":
-		duration = mp3Duration(path)
-	}
+	duration = durationFor(path)
 	return title, duration
-}
-
-func flacDuration(path string) float64 {
-	stream, err := flaclib.Open(path)
-	if err != nil {
-		return 0
-	}
-	defer stream.Close()
-	info := stream.Info
-	if info.SampleRate == 0 {
-		return 0
-	}
-	return float64(info.NSamples) / float64(info.SampleRate)
-}
-
-func mp3Duration(path string) float64 {
-	f, err := os.Open(path)
-	if err != nil {
-		return 0
-	}
-	defer f.Close()
-
-	d := mp3.NewDecoder(f)
-	var frame mp3.Frame
-	skipped := 0
-	var total time.Duration
-	for {
-		if err := d.Decode(&frame, &skipped); err != nil {
-			if err == io.EOF {
-				break
-			}
-			break
-		}
-		total += frame.Duration()
-	}
-	return total.Seconds()
-}
-
-// resolveArtFile checks for image files in the album root and quality subdirs.
-func resolveArtFile(albumDir string, subDirs []string) string {
-	// 1-3: root art files
-	for _, name := range rootArtNames {
-		p := filepath.Join(albumDir, name)
-		if fileExists(p) {
-			return p
-		}
-	}
-	// quality subdir cover files (in os.ReadDir order)
-	imageExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp"}
-	for _, dir := range subDirs {
-		qDir := filepath.Join(albumDir, dir)
-		for _, ext := range imageExts {
-			if p := filepath.Join(qDir, "cover"+ext); fileExists(p) {
-				return p
-			}
-		}
-	}
-	return ""
-}
-
-// collectAllImages returns URLs for all image files in the album root,
-// sorted with cover.* files first, then all others alphabetically.
-func collectAllImages(musicDir, albumDir string) []string {
-	imageExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
-	entries, err := os.ReadDir(albumDir)
-	if err != nil {
-		return nil
-	}
-	var covers, others []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if !imageExts[strings.ToLower(filepath.Ext(e.Name()))] {
-			continue
-		}
-		u := fileURL(musicDir, filepath.Join(albumDir, e.Name()))
-		base := strings.ToLower(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
-		if base == "cover" {
-			covers = append(covers, u)
-		} else {
-			others = append(others, u)
-		}
-	}
-	sort.Strings(covers)
-	sort.Strings(others)
-	return append(covers, others...)
-}
-
-func embeddedPicture(audioPath string) *tag.Picture {
-	f, err := os.Open(audioPath)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
-	m, err := tag.ReadFrom(f)
-	if err != nil {
-		return nil
-	}
-	return m.Picture()
-}
-
-// fileURL converts an absolute filesystem path to a URL path rooted at /music/.
-func fileURL(musicDir, absPath string) string {
-	rel, err := filepath.Rel(musicDir, absPath)
-	if err != nil {
-		return ""
-	}
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	encoded := make([]string, len(parts))
-	for i, p := range parts {
-		encoded[i] = url.PathEscape(p)
-	}
-	return "/music/" + strings.Join(encoded, "/")
-}
-
-// slugify converts a folder name to a URL-safe identifier.
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-		case unicode.IsSpace(r) || r == '-' || r == '_':
-			b.WriteRune('-')
-		}
-	}
-	result := b.String()
-	for strings.Contains(result, "--") {
-		result = strings.ReplaceAll(result, "--", "-")
-	}
-	return strings.Trim(result, "-")
-}
-
-func trimExtension(filename string) string {
-	return strings.TrimSuffix(filename, filepath.Ext(filename))
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
