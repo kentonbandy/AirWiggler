@@ -6,6 +6,8 @@ AirWiggler is a self-hosted music library and player in a single Docker containe
 
 Designed for home servers running [Unraid](https://unraid.net/), but works with any container runtime that can pull from Docker Hub.
 
+Configurable to have no security, an access token (only those with the link can access), or to respect OIDC auth headers.
+
 ---
 
 ## Music Folder Layout
@@ -88,6 +90,7 @@ Add these under **Variables**:
 | `RESCAN_INTERVAL_MINUTES` | `15` | How often to re-scan the music folder automatically. |
 | `COOKIE_SECURE` | `true` | See note below. |
 | `ACCESS_TOKEN` | *(unset)* | Optional, but highly recommended to control access to your library. See [Access Control](#access-control). |
+| `AUTH_PROXY_HEADER` | *(unset)* | Header-based auth for use behind an OIDC/SSO reverse proxy. See [Proxy / OIDC Auth](#proxy--oidc-auth). |
 
 #### COOKIE_SECURE
 
@@ -121,6 +124,33 @@ services:
       DEFAULT_QUALITY: medium
       COOKIE_SECURE: "false"   # set to true if behind an HTTPS reverse proxy
 ```
+
+---
+
+## Proxy / OIDC Auth
+
+If you already run an SSO solution in front of your services — such as [Authelia](https://www.authelia.com/), [Authentik](https://goauthentik.io/), or Traefik Forward Auth — you can delegate authentication entirely to the proxy instead of using `ACCESS_TOKEN`.
+
+These tools authenticate the user (via OIDC, LDAP, etc.) and then stamp a header on every forwarded request to signal that it is authenticated. Set `AUTH_PROXY_HEADER` to the name of that header and AirWiggler will allow the request through if the header is present and non-empty.
+
+Common header names:
+
+| Proxy | Header |
+|-------|--------|
+| Authelia | `Remote-User` |
+| Authentik | `X-authentik-username` |
+| Traefik Forward Auth | `X-Forwarded-User` |
+
+Example:
+
+```yaml
+environment:
+  AUTH_PROXY_HEADER: Remote-User
+```
+
+> **Security requirement:** `AUTH_PROXY_HEADER` trusts the named header unconditionally. The container port must **only** be reachable from the reverse proxy — not directly from the internet — otherwise the header can be spoofed.
+
+`AUTH_PROXY_HEADER` and `ACCESS_TOKEN` are mutually exclusive. If both are set, `AUTH_PROXY_HEADER` takes priority and a warning is logged at startup.
 
 ---
 

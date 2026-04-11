@@ -62,6 +62,27 @@ func secureEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
+// headerAuthMiddleware trusts a header set by an upstream reverse proxy (e.g.
+// Authelia, Authentik) to signal that a request is authenticated. When the
+// named header is present and non-empty the request is allowed through;
+// otherwise a 401 is returned. When header is empty the middleware is a no-op.
+//
+// IMPORTANT: the container port must NOT be reachable directly from the
+// internet — only from the trusted reverse proxy — otherwise this header can
+// be spoofed.
+func headerAuthMiddleware(header string, h http.Handler) http.Handler {
+	if header == "" {
+		return h
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(header) == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
 // securityHeaders adds standard security response headers to every response.
 func securityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -29,6 +29,7 @@ func main() {
 		MusicDir:              envOr("MUSIC_DIR", "/music"),
 		Version:               version,
 		AccessToken:           os.Getenv("ACCESS_TOKEN"),
+		AuthProxyHeader:       os.Getenv("AUTH_PROXY_HEADER"),
 		NotifyURL:             os.Getenv("NOTIFY_URL"),
 		BruteForceThreshold:   envInt("NOTIFY_BRUTE_FORCE_THRESHOLD", 20),
 		AuthGrantThreshold:    envInt("NOTIFY_AUTH_GRANT_THRESHOLD", 10),

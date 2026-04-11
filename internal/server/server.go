@@ -17,13 +17,14 @@ import (
 
 // Server holds app state and HTTP handlers.
 type Server struct {
-	musicDir       string
-	webFS          fs.FS
-	siteTitle      string
-	defaultQuality string
-	version        string
-	accessToken    string
-	cookieSecure   bool
+	musicDir        string
+	webFS           fs.FS
+	siteTitle       string
+	defaultQuality  string
+	version         string
+	accessToken     string
+	authProxyHeader string
+	cookieSecure    bool
 
 	notifier          *notifier
 	bruteForceCounter *eventCounter
@@ -46,6 +47,7 @@ type Config struct {
 	Version               string
 	MusicDir              string
 	AccessToken           string
+	AuthProxyHeader       string
 	NotifyURL             string
 	BruteForceThreshold   int
 	AuthGrantThreshold    int
@@ -63,6 +65,7 @@ func New(cfg Config, webFS fs.FS) *Server {
 		defaultQuality:      cfg.DefaultQuality,
 		version:             cfg.Version,
 		accessToken:         cfg.AccessToken,
+		authProxyHeader:     cfg.AuthProxyHeader,
 		cookieSecure:        cfg.CookieSecure,
 		notifier:            newNotifier(cfg.NotifyURL),
 		bruteForceCounter:   newEventCounter(time.Minute),
@@ -110,7 +113,17 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/style.css", noCacheFS(http.FileServer(http.FS(s.webFS))))
 	mux.Handle("/app.js", noCacheFS(http.FileServer(http.FS(s.webFS))))
 
-	return securityHeaders(tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux))
+	var authHandler http.Handler
+	switch {
+	case s.authProxyHeader != "":
+		if s.accessToken != "" {
+			log.Println("WARNING: both AUTH_PROXY_HEADER and ACCESS_TOKEN are set; AUTH_PROXY_HEADER takes priority")
+		}
+		authHandler = headerAuthMiddleware(s.authProxyHeader, mux)
+	default:
+		authHandler = tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux)
+	}
+	return securityHeaders(authHandler)
 }
 
 // handleIndex serves index.html with versioned asset URLs injected so that
