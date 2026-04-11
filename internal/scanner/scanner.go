@@ -18,8 +18,6 @@ import (
 	"github.com/kento/airwiggler/internal/model"
 )
 
-var qualityFolders = []string{"high", "medium"}
-
 // rootArtNames are checked in order in the album root directory.
 var rootArtNames = []string{"cover.jpg", "folder.jpg", "cover.png"}
 
@@ -57,25 +55,49 @@ func scanAlbum(musicDir, folderName string) (*model.Album, error) {
 		Qualities: make(map[string]model.Quality),
 	}
 
+	entries, err := os.ReadDir(albumDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect subdirectory names (used for quality scanning and art resolution).
+	var subDirs []string
+	for _, e := range entries {
+		if e.IsDir() {
+			subDirs = append(subDirs, e.Name())
+		}
+	}
+
 	var firstAudioPath string
-	for _, q := range qualityFolders {
-		qDir := filepath.Join(albumDir, q)
-		if _, err := os.Stat(qDir); os.IsNotExist(err) {
+
+	// Scan audio files directly in the album root as the "root" quality.
+	rootTracks, rootFirst, err := scanTracks(musicDir, albumDir)
+	if err == nil && len(rootTracks) > 0 {
+		album.Qualities["root"] = model.Quality{Tracks: rootTracks}
+		album.QualityOrder = append(album.QualityOrder, "root")
+		firstAudioPath = rootFirst
+	}
+
+	// Scan each subdirectory as a named quality (in os.ReadDir alphabetical order).
+	for _, dir := range subDirs {
+		qDir := filepath.Join(albumDir, dir)
+		tracks, first, scanErr := scanTracks(musicDir, qDir)
+		if scanErr != nil {
+			log.Printf("scanner: skipping quality %q in %q: %v", dir, folderName, scanErr)
 			continue
 		}
-		tracks, first, err := scanTracks(musicDir, qDir)
-		if err != nil {
-			log.Printf("scanner: skipping quality %q in %q: %v", q, folderName, err)
+		if len(tracks) == 0 {
 			continue
 		}
-		album.Qualities[q] = model.Quality{Tracks: tracks}
+		album.Qualities[dir] = model.Quality{Tracks: tracks}
+		album.QualityOrder = append(album.QualityOrder, dir)
 		if firstAudioPath == "" {
 			firstAudioPath = first
 		}
 	}
 
 	// Cover art: file-based resolution first, then embedded tags.
-	if artPath := resolveArtFile(albumDir); artPath != "" {
+	if artPath := resolveArtFile(albumDir, subDirs); artPath != "" {
 		album.Art = fileURL(musicDir, artPath)
 	} else if firstAudioPath != "" {
 		if pic := embeddedPicture(firstAudioPath); pic != nil {
@@ -183,7 +205,7 @@ func mp3Duration(path string) float64 {
 }
 
 // resolveArtFile checks for image files in the album root and quality subdirs.
-func resolveArtFile(albumDir string) string {
+func resolveArtFile(albumDir string, subDirs []string) string {
 	// 1-3: root art files
 	for _, name := range rootArtNames {
 		p := filepath.Join(albumDir, name)
@@ -191,10 +213,10 @@ func resolveArtFile(albumDir string) string {
 			return p
 		}
 	}
-	// 4-5: quality subdir cover files
+	// quality subdir cover files (in os.ReadDir order)
 	imageExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp"}
-	for _, q := range qualityFolders {
-		qDir := filepath.Join(albumDir, q)
+	for _, dir := range subDirs {
+		qDir := filepath.Join(albumDir, dir)
 		for _, ext := range imageExts {
 			if p := filepath.Join(qDir, "cover"+ext); fileExists(p) {
 				return p

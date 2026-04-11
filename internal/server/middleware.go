@@ -9,7 +9,7 @@ const cookieName = "aw_session"
 
 // tokenMiddleware wraps h with shared-token access control.
 // When token is empty it returns h unchanged (no-op).
-func tokenMiddleware(token string, n *notifier, bfCounter, agCounter *eventCounter, bfThreshold, agThreshold int, h http.Handler) http.Handler {
+func tokenMiddleware(token string, cookieSecure bool, n *notifier, bfCounter, agCounter *eventCounter, bfThreshold, agThreshold int, h http.Handler) http.Handler {
 	if token == "" {
 		return h
 	}
@@ -34,7 +34,7 @@ func tokenMiddleware(token string, n *notifier, bfCounter, agCounter *eventCount
 					MaxAge:   60 * 60 * 24 * 30, // 30 days
 					HttpOnly: true,
 					SameSite: http.SameSiteLaxMode,
-					Secure:   true,
+					Secure:   cookieSecure,
 				})
 				// New session granted — track for link-circulating detection.
 				agCounter.record()

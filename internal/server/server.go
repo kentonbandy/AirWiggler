@@ -20,6 +20,7 @@ type Server struct {
 	siteTitle      string
 	defaultQuality string
 	accessToken    string
+	cookieSecure   bool
 
 	notifier          *notifier
 	bruteForceCounter *eventCounter
@@ -46,6 +47,7 @@ type Config struct {
 	AuthGrantThreshold    int
 	RescanOnStart         bool
 	RescanIntervalMinutes int
+	CookieSecure          bool
 }
 
 // New creates a Server and performs an initial scan if configured.
@@ -56,6 +58,7 @@ func New(cfg Config, webFS fs.FS) *Server {
 		siteTitle:           cfg.SiteTitle,
 		defaultQuality:      cfg.DefaultQuality,
 		accessToken:         cfg.AccessToken,
+		cookieSecure:        cfg.CookieSecure,
 		notifier:            newNotifier(cfg.NotifyURL),
 		bruteForceCounter:   newEventCounter(time.Minute),
 		authGrantCounter:    newEventCounter(time.Hour),
@@ -97,7 +100,7 @@ func (s *Server) Handler() http.Handler {
 	// Serve embedded frontend.
 	mux.Handle("/", http.FileServer(http.FS(s.webFS)))
 
-	return securityHeaders(tokenMiddleware(s.accessToken, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux))
+	return securityHeaders(tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux))
 }
 
 // handleConfig serves GET /api/config — exposes runtime config to the frontend.

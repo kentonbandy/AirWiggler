@@ -14,11 +14,12 @@ type Quality struct {
 
 // Album represents a single album/collection.
 type Album struct {
-	ID        string             `json:"id"`
-	Title     string             `json:"title"`
-	Art       string             `json:"art,omitempty"`
-	Images    []string           `json:"images,omitempty"` // additional images in album root
-	Qualities map[string]Quality `json:"qualities"`
+	ID           string             `json:"id"`
+	Title        string             `json:"title"`
+	Art          string             `json:"art,omitempty"`
+	Images       []string           `json:"images,omitempty"` // additional images in album root
+	Qualities    map[string]Quality `json:"qualities"`
+	QualityOrder []string           `json:"qualityOrder"` // stable order of quality keys
 
 	// ArtBytes and ArtMIME hold embedded cover art extracted from audio tags.
 	// Not serialized to JSON — served by the HTTP server at /api/art/<id>.

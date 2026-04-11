@@ -139,12 +139,11 @@ main {
   padding: 2px 7px;
   border-radius: 999px;
   background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  border: 1px solid var(--accent);
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.badge.high { border-color: var(--accent); color: var(--accent); }
 
 /* Player View */
 #player-view {

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"embed"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/kento/airwiggler/internal/server"
 )
@@ -15,10 +17,12 @@ import (
 var webFiles embed.FS
 
 func main() {
+	loadDotEnv(".env")
+
 	cfg := server.Config{
 		Port:                  envOr("APP_PORT", "8080"),
 		SiteTitle:             envOr("SITE_TITLE", "My Music Library"),
-		DefaultQuality:        envOr("DEFAULT_QUALITY", "medium"),
+		DefaultQuality:        envOr("DEFAULT_QUALITY", "high"),
 		MusicDir:              envOr("MUSIC_DIR", "/music"),
 		AccessToken:           os.Getenv("ACCESS_TOKEN"),
 		NotifyURL:             os.Getenv("NOTIFY_URL"),
@@ -26,6 +30,7 @@ func main() {
 		AuthGrantThreshold:    envInt("NOTIFY_AUTH_GRANT_THRESHOLD", 10),
 		RescanOnStart:         envBool("RESCAN_ON_START", true),
 		RescanIntervalMinutes: envInt("RESCAN_INTERVAL_MINUTES", 15),
+		CookieSecure:          envBool("COOKIE_SECURE", true),
 	}
 
 	// Serve files from the web/ subdirectory at the root URL.
@@ -72,4 +77,36 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return i
+}
+
+// loadDotEnv reads KEY=VALUE pairs from path and sets them in the environment,
+// silently skipping the file if it does not exist. Existing env vars are never
+// overwritten, so real environment variables always take precedence.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // file absent — no-op
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		// Strip optional surrounding quotes.
+		if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+			value = value[1 : len(value)-1]
+		}
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
 }

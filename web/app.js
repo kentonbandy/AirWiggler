@@ -79,10 +79,12 @@ function renderLibrary(albums) {
 
     const badges = document.createElement('div');
     badges.className = 'badges';
-    for (const q of ['high', 'medium']) {
-      if (album.qualities[q]?.tracks?.length > 0) {
+    const albumQualities = availableQualities(album);
+    const showBadges = !(albumQualities.length === 1 && albumQualities[0] === 'root');
+    if (showBadges) {
+      for (const q of albumQualities) {
         const b = document.createElement('span');
-        b.className = 'badge ' + q;
+        b.className = 'badge';
         b.textContent = q;
         badges.appendChild(b);
       }
@@ -150,7 +152,7 @@ window.addEventListener('popstate', () => {
 // ── Player ────────────────────────────────────────────────────────────────
 
 function availableQualities(album) {
-  return ['high', 'medium'].filter(q => album.qualities[q]?.tracks?.length > 0);
+  return (album.qualityOrder ?? []).filter(q => album.qualities[q]?.tracks?.length > 0);
 }
 
 function renderQualitySelector() {
@@ -158,11 +160,11 @@ function renderQualitySelector() {
   container.innerHTML = '';
 
   const available = availableQualities(currentAlbum);
+  if (available.length <= 1) return;
 
-  for (const q of ['high', 'medium']) {
+  for (const q of available) {
     const btn = document.createElement('button');
     btn.textContent = q.charAt(0).toUpperCase() + q.slice(1);
-    if (!available.includes(q)) continue;
     if (q === currentQuality) btn.classList.add('active');
     btn.addEventListener('click', () => switchQuality(q));
     container.appendChild(btn);
