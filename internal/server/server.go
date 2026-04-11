@@ -97,8 +97,22 @@ func (s *Server) Handler() http.Handler {
 	// Serve audio files and file-based cover art directly from the music dir.
 	mux.Handle("/music/", http.StripPrefix("/music/", http.FileServer(http.Dir(s.musicDir))))
 
-	// Serve embedded frontend.
-	mux.Handle("/", http.FileServer(http.FS(s.webFS)))
+	// Serve embedded frontend. Force revalidation on every request so that
+	// browsers never serve stale JS/CSS after a container update.
+	mux.Handle("/", noCacheFS(http.FileServer(http.FS(s.webFS))))
+
+	return securityHeaders(tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux))
+}
+
+// noCacheFS wraps a handler and sets Cache-Control: no-cache on every response.
+// The browser still sends a conditional request (ETag/Last-Modified), so unchanged
+// files are served as 304 Not Modified — no wasted bandwidth.
+func noCacheFS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
+}
 
 	return securityHeaders(tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux))
 }
