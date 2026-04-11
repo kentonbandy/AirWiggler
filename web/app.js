@@ -2,9 +2,12 @@
 const audio = document.getElementById('audio');
 
 let library = null;
-let currentAlbum = null;
+let currentAlbum = null;   // album whose audio is loaded/playing
 let currentQuality = 'medium';
 let currentTrackIndex = 0;
+let viewAlbum = null;      // album currently displayed in the player view
+let viewQuality = 'medium';
+const albumCardMap = new Map(); // albumId → card DOM element
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -20,6 +23,7 @@ let currentTrackIndex = 0;
     document.getElementById('site-title').textContent = cfg.siteTitle;
     document.title = cfg.siteTitle;
     currentQuality = cfg.defaultQuality || 'medium';
+    viewQuality = currentQuality;
   } catch (e) {
     console.warn('Could not load config:', e);
   }
@@ -41,6 +45,7 @@ async function fetchLibrary() {
 
 function renderLibrary(albums) {
   const grid = document.getElementById('album-grid');
+  albumCardMap.clear();
   grid.innerHTML = '';
 
   if (albums.length === 0) {
@@ -55,6 +60,7 @@ function renderLibrary(albums) {
   for (const album of albums) {
     const card = document.createElement('div');
     card.className = 'album-card';
+    albumCardMap.set(album.id, card);
     card.onclick = () => openAlbum(album);
 
     if (album.art) {
@@ -93,30 +99,28 @@ function renderLibrary(albums) {
     card.appendChild(info);
     grid.appendChild(card);
   }
+  updateNowPlayingBadge();
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────
 
 function showLibrary(pushState = true) {
-  audio.pause();
-  audio.src = '';
-  currentAlbum = null;
-  currentTrackIndex = 0;
   document.getElementById('library-view').classList.remove('hidden');
   document.getElementById('player-view').classList.add('hidden');
   document.getElementById('back-btn').classList.add('hidden');
+  viewAlbum = null;
+  updateNowPlayingBadge();
   if (pushState) history.pushState(null, '', '#');
 }
 
 function openAlbum(album, pushState = true) {
-  currentAlbum = album;
+  viewAlbum = album;
 
-  // Pick best available quality; fall back to first available if preferred isn't present
+  // Pick best available quality for the view; fall back to first available if preferred isn't present
   const available = availableQualities(album);
-  if (!available.includes(currentQuality)) {
-    currentQuality = available[0];
+  if (!available.includes(viewQuality)) {
+    viewQuality = available[0];
   }
-  currentTrackIndex = 0;
 
   document.getElementById('library-view').classList.add('hidden');
   document.getElementById('player-view').classList.remove('hidden');
@@ -134,12 +138,6 @@ function openAlbum(album, pushState = true) {
 
   renderQualitySelector();
   renderTrackList();
-  const firstTrack = album.qualities[currentQuality]?.tracks?.[0];
-  document.getElementById('track-title-display').textContent = firstTrack?.title ?? '';
-  document.getElementById('seek-bar').value = 0;
-  document.getElementById('time-current').textContent = '0:00';
-  document.getElementById('time-total').textContent = firstTrack ? formatDuration(firstTrack.duration) : '0:00';
-  updatePlayButton();
   if (pushState) history.pushState({ albumId: album.id }, '', '#album/' + album.id);
 }
 
@@ -166,13 +164,13 @@ function renderQualitySelector() {
   const container = document.getElementById('quality-selector');
   container.innerHTML = '';
 
-  const available = availableQualities(currentAlbum);
+  const available = availableQualities(viewAlbum);
   if (available.length <= 1) return;
 
   for (const q of available) {
     const btn = document.createElement('button');
     btn.textContent = q.charAt(0).toUpperCase() + q.slice(1);
-    if (q === currentQuality) btn.classList.add('active');
+    if (q === viewQuality) btn.classList.add('active');
     btn.addEventListener('click', () => switchQuality(q));
     container.appendChild(btn);
   }
@@ -181,14 +179,15 @@ function renderQualitySelector() {
 function renderTrackList() {
   const list = document.getElementById('track-list');
   list.innerHTML = '';
-  const tracks = currentAlbum.qualities[currentQuality]?.tracks || [];
+  const tracks = viewAlbum.qualities[viewQuality]?.tracks || [];
+  const isViewingPlaying = viewAlbum.id === currentAlbum?.id && viewQuality === currentQuality;
 
   for (let i = 0; i < tracks.length; i++) {
     const t = tracks[i];
     const row = document.createElement('div');
-    row.className = 'track-row' + (i === currentTrackIndex ? ' active' : '');
+    row.className = 'track-row' + (isViewingPlaying && i === currentTrackIndex ? ' active' : '');
     row.dataset.index = i;
-    row.onclick = () => playTrack(i);
+    row.onclick = () => playTrackFromView(i);
 
     const num = document.createElement('span');
     num.className = 'track-num';
@@ -207,6 +206,16 @@ function renderTrackList() {
   }
 }
 
+function playTrackFromView(index) {
+  // Sync playing state from the viewed album before playing
+  if (viewAlbum.id !== currentAlbum?.id) {
+    currentAlbum = viewAlbum;
+    currentQuality = viewQuality;
+    updateNowPlayingBadge();
+  }
+  playTrack(index);
+}
+
 function playTrack(index) {
   const tracks = currentAlbum.qualities[currentQuality]?.tracks || [];
   if (index < 0 || index >= tracks.length) return;
@@ -218,35 +227,58 @@ function playTrack(index) {
   audio.load();
   audio.play().catch(e => console.warn('Playback error:', e));
 
+  // Reveal controls on first play and clear idle state
+  const controls = document.getElementById('controls');
+  controls.classList.remove('hidden', 'idle');
+  document.getElementById('now-playing-idle').classList.add('hidden');
+  document.getElementById('track-title-display').classList.remove('hidden');
   document.getElementById('track-title-display').textContent = track.title;
+
+  const artEl = document.getElementById('now-playing-art');
+  if (currentAlbum.art) {
+    artEl.src = currentAlbum.art;
+    artEl.classList.remove('hidden');
+  } else {
+    artEl.src = '';
+    artEl.classList.add('hidden');
+  }
   updateTrackHighlight();
   updatePlayButton();
 }
 
 function switchQuality(q) {
-  if (q === currentQuality) return;
-  const wasPlaying = !audio.paused;
-  currentQuality = q;
+  if (q === viewQuality) return;
+  viewQuality = q;
 
-  renderQualitySelector();
-  renderTrackList();
+  // If viewing the currently playing album, also switch playback quality
+  if (currentAlbum && viewAlbum.id === currentAlbum.id) {
+    const wasPlaying = !audio.paused;
+    currentQuality = q;
 
-  const tracks = currentAlbum.qualities[currentQuality]?.tracks || [];
-  if (tracks.length === 0) return;
+    renderQualitySelector();
+    renderTrackList();
 
-  // Clamp index in case new quality has fewer tracks
-  if (currentTrackIndex >= tracks.length) currentTrackIndex = 0;
-  const track = tracks[currentTrackIndex];
+    const tracks = currentAlbum.qualities[currentQuality]?.tracks || [];
+    if (tracks.length === 0) return;
 
-  audio.src = track.url;
-  audio.load();
-  document.getElementById('track-title-display').textContent = track.title;
+    // Clamp index in case new quality has fewer tracks
+    if (currentTrackIndex >= tracks.length) currentTrackIndex = 0;
+    const track = tracks[currentTrackIndex];
 
-  if (wasPlaying) {
-    audio.play().catch(e => console.warn('Playback error:', e));
+    audio.src = track.url;
+    audio.load();
+    document.getElementById('track-title-display').textContent = track.title;
+
+    if (wasPlaying) {
+      audio.play().catch(e => console.warn('Playback error:', e));
+    }
+    updateTrackHighlight();
+    updatePlayButton();
+  } else {
+    // View-only: just re-render the player view
+    renderQualitySelector();
+    renderTrackList();
   }
-  updateTrackHighlight();
-  updatePlayButton();
 }
 
 function togglePlay() {
@@ -265,8 +297,25 @@ function togglePlay() {
 
 function stopPlayback() {
   audio.pause();
-  audio.currentTime = 0;
+  audio.src = '';
+  currentAlbum = null;
+  currentTrackIndex = 0;
   updatePlayButton();
+
+  const controls = document.getElementById('controls');
+  controls.classList.add('idle');
+  document.getElementById('track-title-display').classList.add('hidden');
+  document.getElementById('now-playing-idle').classList.remove('hidden');
+  const nowPlayingArt = document.getElementById('now-playing-art');
+  nowPlayingArt.src = '';
+  nowPlayingArt.classList.add('hidden');
+  document.getElementById('seek-bar').value = 0;
+  document.getElementById('time-current').textContent = '0:00';
+  document.getElementById('time-total').textContent = '0:00';
+
+  updateNowPlayingBadge();
+  // Re-render track list to clear active highlight
+  if (viewAlbum) renderTrackList();
 }
 
 function prevTrack() {
@@ -288,14 +337,21 @@ function nextTrack() {
 }
 
 function updateTrackHighlight() {
+  const isViewingPlaying = viewAlbum?.id === currentAlbum?.id && viewQuality === currentQuality;
   const rows = document.querySelectorAll('.track-row');
   for (const row of rows) {
-    row.classList.toggle('active', parseInt(row.dataset.index) === currentTrackIndex);
+    row.classList.toggle('active', isViewingPlaying && parseInt(row.dataset.index) === currentTrackIndex);
   }
 }
 
 function updatePlayButton() {
   document.getElementById('play-btn').textContent = audio.paused ? '\u25b6' : '\u23f8';
+}
+
+function updateNowPlayingBadge() {
+  for (const [id, card] of albumCardMap) {
+    card.classList.toggle('now-playing', id === currentAlbum?.id);
+  }
 }
 
 // ── Button event listeners ────────────────────────────────────────────────
@@ -395,9 +451,9 @@ document.getElementById('player-art').addEventListener('click', function () {
   if (this.src && !this.classList.contains('hidden')) {
     // Use album.images (all root images, cover first) if available;
     // fall back to just the art URL.
-    const images = (currentAlbum?.images?.length)
-      ? currentAlbum.images
-      : (currentAlbum?.art ? [currentAlbum.art] : []);
+    const images = (viewAlbum?.images?.length)
+      ? viewAlbum.images
+      : (viewAlbum?.art ? [viewAlbum.art] : []);
     if (images.length === 0) return;
     openLightbox(images, 0);
   }

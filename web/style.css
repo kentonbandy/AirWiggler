@@ -78,6 +78,7 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 main {
   flex: 1;
   padding: 24px;
+  padding-bottom: 200px; /* space for fixed controls bar */
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
@@ -96,9 +97,26 @@ main {
   border-radius: var(--radius);
   overflow: hidden;
   cursor: pointer;
+  position: relative;
   transition: transform 0.15s, border-color 0.15s;
 }
 .album-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+
+.album-card.now-playing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.album-card.now-playing::after {
+  content: '\25B6';
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.7rem;
+  color: var(--accent);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
 
 .album-card img {
   width: 100%;
@@ -248,14 +266,30 @@ main {
 /* Controls */
 #controls {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  padding-bottom: max(0px, env(safe-area-inset-bottom));
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+}
+
+.controls-inner {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px 24px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 10px;
-  position: sticky;
-  bottom: 16px;
+}
+
+#controls.idle #control-buttons button {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: default;
 }
 
 @media (max-width: 600px) {
@@ -268,35 +302,34 @@ main {
     font-size: 0.75rem;
   }
 
-  #controls {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
-    z-index: 20;
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
-  }
-
-  /* Keep the track list from being hidden under the fixed controls bar */
-  #track-list {
-    margin-bottom: 180px;
-  }
-
   #control-extras #volume-label { display: none; }
 }
 
 #now-playing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   font-size: 0.9rem;
   color: var(--text-muted);
-  text-align: center;
   min-height: 1.2em;
+  overflow: hidden;
+}
+
+#now-playing-art {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+#now-playing-idle,
+#track-title-display {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 #seek-row {
