@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Music Library</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="flac-warning" class="banner warning hidden">
+    &#9888; Your browser does not support FLAC playback. Switch to Medium quality to listen.
+  </div>
+
+  <header>
+    <span id="site-title">My Music Library</span>
+    <button id="back-btn" class="hidden">&#8592; Library</button>
+  </header>
+
+  <main>
+    <!-- Library View -->
+    <section id="library-view">
+      <div id="album-grid"></div>
+    </section>
+
+    <!-- Player View -->
+    <section id="player-view" class="hidden">
+      <div id="player-header">
+        <img id="player-art" src="" alt="Album Art">
+        <div id="player-info">
+          <h2 id="player-title"></h2>
+          <div id="quality-selector"></div>
+        </div>
+      </div>
+
+      <div id="track-list"></div>
+
+      <div id="controls">
+        <audio id="audio"></audio>
+
+        <div id="now-playing">
+          <span id="track-title-display"></span>
+        </div>
+
+        <div id="seek-row">
+          <span id="time-current">0:00</span>
+          <input id="seek-bar" type="range" min="0" max="100" value="0" step="0.1">
+          <span id="time-total">0:00</span>
+        </div>
+
+        <div id="control-buttons">
+          <button id="prev-btn" title="Previous">&#9198;</button>
+          <button id="play-btn" title="Play / Pause">&#9654;</button>
+          <button id="stop-btn" title="Stop">&#9209;</button>
+          <button id="next-btn" title="Next">&#9197;</button>
+        </div>
+
+        <div id="control-extras">
+          <label>
+            <input id="autoplay-toggle" type="checkbox" checked>
+            Autoplay
+          </label>
+          <label>
+            &#128266;
+            <input id="volume" type="range" min="0" max="1" step="0.05" value="1">
+          </label>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="hidden">
+    <button id="lightbox-prev" class="lightbox-nav" title="Previous">&#10094;</button>
+    <img id="lightbox-img" src="" alt="">
+    <button id="lightbox-next" class="lightbox-nav" title="Next">&#10095;</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
