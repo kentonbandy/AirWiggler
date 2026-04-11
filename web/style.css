@@ -286,7 +286,7 @@ main {
     margin-bottom: 180px;
   }
 
-  #volume-label { display: none; }
+  #control-extras #volume-label { display: none; }
 }
 
 #now-playing {
