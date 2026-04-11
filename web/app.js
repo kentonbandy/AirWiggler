@@ -98,6 +98,10 @@ function renderLibrary(albums) {
 // ── Views ─────────────────────────────────────────────────────────────────
 
 function showLibrary(pushState = true) {
+  audio.pause();
+  audio.src = '';
+  currentAlbum = null;
+  currentTrackIndex = 0;
   document.getElementById('library-view').classList.remove('hidden');
   document.getElementById('player-view').classList.add('hidden');
   document.getElementById('back-btn').classList.add('hidden');
@@ -132,6 +136,9 @@ function openAlbum(album, pushState = true) {
   renderTrackList();
   const firstTrack = album.qualities[currentQuality]?.tracks?.[0];
   document.getElementById('track-title-display').textContent = firstTrack?.title ?? '';
+  document.getElementById('seek-bar').value = 0;
+  document.getElementById('time-current').textContent = '0:00';
+  document.getElementById('time-total').textContent = firstTrack ? formatDuration(firstTrack.duration) : '0:00';
   updatePlayButton();
   if (pushState) history.pushState({ albumId: album.id }, '', '#album/' + album.id);
 }
@@ -246,7 +253,7 @@ function togglePlay() {
   if (!currentAlbum) return;
   if (audio.paused) {
     // If no src loaded yet, start from current track
-    if (!audio.src || audio.src === window.location.href) {
+    if (audio.readyState === 0) {
       playTrack(currentTrackIndex);
       return;
     }
