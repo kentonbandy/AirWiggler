@@ -95,13 +95,14 @@ function renderLibrary(albums) {
 
 // ── Views ─────────────────────────────────────────────────────────────────
 
-function showLibrary() {
+function showLibrary(pushState = true) {
   document.getElementById('library-view').classList.remove('hidden');
   document.getElementById('player-view').classList.add('hidden');
   document.getElementById('back-btn').classList.add('hidden');
+  if (pushState) history.pushState(null, '', '#');
 }
 
-function openAlbum(album) {
+function openAlbum(album, pushState = true) {
   currentAlbum = album;
 
   // Pick best available quality; fall back to first available if preferred isn't present
@@ -127,9 +128,24 @@ function openAlbum(album) {
 
   renderQualitySelector();
   renderTrackList();
-  document.getElementById('track-title-display').textContent = '';
+  const firstTrack = album.qualities[currentQuality]?.tracks?.[0];
+  document.getElementById('track-title-display').textContent = firstTrack?.title ?? '';
   updatePlayButton();
+  if (pushState) history.pushState({ albumId: album.id }, '', '#album/' + album.id);
 }
+
+// Handle browser back/forward.
+window.addEventListener('popstate', () => {
+  const hash = location.hash;
+  if (!hash || hash === '#') {
+    showLibrary(false);
+  } else if (hash.startsWith('#album/') && library) {
+    const id = hash.slice('#album/'.length);
+    const album = library.albums.find(a => a.id === id);
+    if (album) openAlbum(album, false);
+    else showLibrary(false);
+  }
+});
 
 // ── Player ────────────────────────────────────────────────────────────────
 
@@ -142,13 +158,13 @@ function renderQualitySelector() {
   container.innerHTML = '';
 
   const available = availableQualities(currentAlbum);
-  if (available.length < 2) return; // only one tier — no selector needed
 
-  for (const q of available) {
+  for (const q of ['high', 'medium']) {
     const btn = document.createElement('button');
     btn.textContent = q.charAt(0).toUpperCase() + q.slice(1);
+    if (!available.includes(q)) continue;
     if (q === currentQuality) btn.classList.add('active');
-    btn.onclick = () => switchQuality(q);
+    btn.addEventListener('click', () => switchQuality(q));
     container.appendChild(btn);
   }
 }
