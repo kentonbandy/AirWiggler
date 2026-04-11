@@ -1,14 +1,16 @@
 # AirWiggler
 
-A self-hosted music library and player in a single Docker container. Point it at a folder of music, open a browser, and play.
+A self-hosted music library and player in a single Docker container. Point it at a folder of music, open a browser, and play. Supports hosting multiple levels of quality so users can select the best option for their connection. Minimal configuration required.
 
 Designed for home servers running [Unraid](https://unraid.net/), but works with any container runtime that can pull from Docker Hub.
+
+This app was built to make it easy to share audio with others without subjecting them to the pervasive ads on most free platforms.
 
 ---
 
 ## Music Folder Layout
 
-Every direct subfolder of `/music` is treated as one album or collection. Beyond that, the structure is flexible:
+Every direct subfolder of `/music` is treated as one album or collection. Beyond that, the structure is flexible - the folder structure is the configuration:
 
 ```
 /music/
