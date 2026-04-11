@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <Name>AirWiggler</Name>
+  <Repository>kentonbandy/airwiggler:latest</Repository>
+  <Registry>https://hub.docker.com/r/kentonbandy/airwiggler</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/kentonbandy/AirWiggler/issues</Support>
+  <Project>https://github.com/kentonbandy/AirWiggler</Project>
+  <Overview>Self-hosted music library and player in a single container. Point it at a folder of music, open a browser, and play. Supports multiple quality tiers (e.g. FLAC and MP3) so users can pick the best option for their connection. Minimal configuration required.</Overview>
+  <Category>MediaServer:Music</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/kentonbandy/AirWiggler/main/icon.png</Icon>
+  <ReadMe>https://github.com/kentonbandy/AirWiggler/blob/main/README.md</ReadMe>
+  <Config Name="Music Path" Target="/music" Default="/mnt/user/music" Mode="ro"
+    Description="Path to your music library on the host." Type="Path"
+    Display="always" Required="true" Mask="false"/>
+  <Config Name="Port" Target="8080" Default="8080" Mode="tcp"
+    Description="Port to access the web UI." Type="Port"
+    Display="always" Required="true" Mask="false"/>
+  <Config Name="SITE_TITLE" Target="SITE_TITLE" Default="My Music Library"
+    Description="Title shown in the browser tab and UI." Type="Variable"
+    Display="always" Required="false" Mask="false"/>
+  <Config Name="DEFAULT_QUALITY" Target="DEFAULT_QUALITY" Default="medium"
+    Description="Which quality folder to select by default. Will match a subfolder name (e.g. high, medium, flac, mp3)." Type="Variable"
+    Display="always" Required="false" Mask="false"/>
+  <Config Name="ACCESS_TOKEN" Target="ACCESS_TOKEN" Default=""
+    Description="Optional shared token to restrict access. Share the app URL as https://yourdomain.com/?token=YOUR_TOKEN. Leave blank to disable." Type="Variable"
+    Display="always" Required="false" Mask="true"/>
+  <Config Name="COOKIE_SECURE" Target="COOKIE_SECURE" Default="true"
+    Description="Set to false when running over plain HTTP on a local network only. Must be true when exposed via HTTPS." Type="Variable"
+    Display="always" Required="false" Mask="false"/>
+  <Config Name="NOTIFY_URL" Target="NOTIFY_URL" Default=""
+    Description="ntfy topic URL for push notifications on suspicious activity (e.g. https://ntfy.sh/your-unguessable-topic). Leave blank to disable. See https://github.com/kentonbandy/AirWiggler/blob/main/docs/notifications.md" Type="Variable"
+    Display="always" Required="false" Mask="true"/>
+  <Config Name="NOTIFY_BRUTE_FORCE_THRESHOLD" Target="NOTIFY_BRUTE_FORCE_THRESHOLD" Default="20"
+    Description="Number of failed token attempts within the rate-limit window before a brute-force alert is sent." Type="Variable"
+    Display="advanced" Required="false" Mask="false"/>
+  <Config Name="NOTIFY_AUTH_GRANT_THRESHOLD" Target="NOTIFY_AUTH_GRANT_THRESHOLD" Default="10"
+    Description="Number of successful auth grants before an alert is sent." Type="Variable"
+    Display="advanced" Required="false" Mask="false"/>
+  <Config Name="APP_PORT" Target="APP_PORT" Default="8080"
+    Description="Port the server listens on inside the container. Must match the port mapping above." Type="Variable"
+    Display="advanced" Required="false" Mask="false"/>
+  <Config Name="RESCAN_ON_START" Target="RESCAN_ON_START" Default="true"
+    Description="Scan for new or changed albums when the container starts." Type="Variable"
+    Display="advanced" Required="false" Mask="false"/>
+  <Config Name="RESCAN_INTERVAL_MINUTES" Target="RESCAN_INTERVAL_MINUTES" Default="15"
+    Description="How often (in minutes) to automatically re-scan the music folder." Type="Variable"
+    Display="advanced" Required="false" Mask="false"/>
+</Container>
