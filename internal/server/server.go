@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -102,12 +104,42 @@ func (s *Server) Handler() http.Handler {
 
 	// Serve embedded frontend. Force revalidation on every request so that
 	// browsers never serve stale JS/CSS after a container update.
-	mux.Handle("/", noCacheFS(http.FileServer(http.FS(s.webFS))))
+	// index.html is served via a dedicated handler that injects versioned
+	// asset URLs so CDNs (e.g. Cloudflare) treat each release as new URLs.
+	mux.HandleFunc("/", s.handleIndex)
+	mux.Handle("/style.css", noCacheFS(http.FileServer(http.FS(s.webFS))))
+	mux.Handle("/app.js", noCacheFS(http.FileServer(http.FS(s.webFS))))
 
 	return securityHeaders(tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux))
 }
 
-// noCacheFS wraps a handler and sets Cache-Control: no-cache on every response.
+// handleIndex serves index.html with versioned asset URLs injected so that
+// CDNs cache-bust automatically on each new release.
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		// Fall through to the embedded filesystem for other static assets.
+		noCacheFS(http.FileServer(http.FS(s.webFS))).ServeHTTP(w, r)
+		return
+	}
+	f, err := s.webFS.Open("index.html")
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	body, err := io.ReadAll(f)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	v := s.version
+	body = bytes.ReplaceAll(body, []byte(`href="style.css"`), []byte(`href="style.css?v=`+v+`"`))
+	body = bytes.ReplaceAll(body, []byte(`src="app.js"`), []byte(`src="app.js?v=`+v+`"`))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write(body)
+}
+
 // The browser still sends a conditional request (ETag/Last-Modified), so unchanged
 // files are served as 304 Not Modified — no wasted bandwidth.
 func noCacheFS(h http.Handler) http.Handler {
