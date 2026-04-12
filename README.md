@@ -114,7 +114,7 @@ If you're not on Unraid, here's a minimal `compose.yml`:
 ```yaml
 services:
   airwiggler:
-    image: kento/airwiggler
+    image: kentonbandy/airwiggler
     ports:
       - "8080:8080"
     volumes:
