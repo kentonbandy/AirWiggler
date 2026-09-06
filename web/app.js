@@ -8,6 +8,8 @@ let currentTrackIndex = 0;
 let viewAlbum = null;      // album currently displayed in the player view
 let viewQuality = 'medium';
 const albumCardMap = new Map(); // albumId → card DOM element
+let currentShareLinks = null;
+let toastTimer = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -393,6 +395,75 @@ function updateNowPlayingBadge() {
   }
 }
 
+// ── Sharing ───────────────────────────────────────────────────────────────
+
+async function handleShareButtonClick() {
+  if (!viewAlbum) return;
+
+  const dropdown = document.getElementById('share-dropdown');
+  if (!dropdown.classList.contains('hidden')) {
+    closeShareDropdown();
+    return;
+  }
+
+  try {
+    const links = await loadShareLinks();
+    if (!links.albumOnlyLink) {
+      await copyTextToClipboard(links.fullAccessLink);
+      showToast('Link copied');
+      return;
+    }
+    openShareDropdown();
+  } catch (e) {
+    showToast(e.message || 'Could not generate share link');
+  }
+}
+
+function openShareDropdown() {
+  document.getElementById('share-dropdown').classList.remove('hidden');
+  document.getElementById('album-share-btn').setAttribute('aria-expanded', 'true');
+}
+
+function closeShareDropdown() {
+  document.getElementById('share-dropdown').classList.add('hidden');
+  document.getElementById('album-share-btn').setAttribute('aria-expanded', 'false');
+}
+
+async function loadShareLinks() {
+  if (currentShareLinks?.albumId === viewAlbum?.id) return currentShareLinks;
+  const resp = await fetch('/api/share?album=' + encodeURIComponent(viewAlbum.id));
+  if (!resp.ok) throw new Error('Share links are only available to full-library users.');
+  currentShareLinks = await resp.json();
+  currentShareLinks.albumId = viewAlbum.id;
+  return currentShareLinks;
+}
+
+async function copyShareLink(kind) {
+  if (!viewAlbum) return;
+  closeShareDropdown();
+  try {
+    const links = await loadShareLinks();
+    const link = kind === 'albumOnly' ? links.albumOnlyLink : links.fullAccessLink;
+    if (!link) throw new Error('That link type is not configured.');
+    await copyTextToClipboard(link);
+    showToast('Link copied');
+  } catch (e) {
+    showToast(e.message || 'Could not copy link');
+  }
+}
+
+async function copyTextToClipboard(text) {
+  await navigator.clipboard.writeText(text);
+}
+
+function showToast(text) {
+  const toast = document.getElementById('toast');
+  toast.textContent = text;
+  toast.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.add('hidden'), 2200);
+}
+
 // ── Button event listeners ────────────────────────────────────────────────
 
 document.getElementById('site-title').addEventListener('click', e => {
@@ -401,6 +472,14 @@ document.getElementById('site-title').addEventListener('click', e => {
 });
 document.getElementById('back-btn').addEventListener('click', showLibrary);
 document.getElementById('album-play-btn').addEventListener('click', toggleAlbumPlaybackFromView);
+document.getElementById('album-share-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  handleShareButtonClick();
+});
+document.getElementById('share-dropdown').addEventListener('click', e => e.stopPropagation());
+document.getElementById('share-album-only-btn').addEventListener('click', () => copyShareLink('albumOnly'));
+document.getElementById('share-full-access-btn').addEventListener('click', () => copyShareLink('fullAccess'));
+document.addEventListener('click', closeShareDropdown);
 document.getElementById('prev-btn').addEventListener('click', prevTrack);
 document.getElementById('play-btn').addEventListener('click', togglePlay);
 document.getElementById('stop-btn').addEventListener('click', stopPlayback);

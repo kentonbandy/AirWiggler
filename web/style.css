@@ -243,7 +243,8 @@ main {
   flex-wrap: wrap;
 }
 
-#album-play-btn {
+#album-play-btn,
+#album-share-btn {
   width: 44px;
   height: 44px;
   display: inline-flex;
@@ -251,14 +252,66 @@ main {
   justify-content: center;
   padding: 0;
   border-radius: 50%;
-  background: var(--accent);
-  border-color: var(--accent);
   color: #fff;
   font-size: 1rem;
   line-height: 1;
 }
 
+#album-play-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+#album-share-btn {
+  background: var(--surface2);
+  border-color: var(--border);
+}
+
 #quality-selector { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Sharing */
+#share-dropdown-wrap {
+  position: relative;
+}
+
+#share-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  z-index: 30;
+}
+
+#share-dropdown button {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  padding: 9px 10px;
+}
+
+#share-dropdown button:hover { background: var(--surface2); }
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 180px;
+  transform: translateX(-50%);
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 10px 16px;
+  z-index: 95;
+}
 
 /* Track List */
 #track-list {

@@ -29,6 +29,7 @@ func main() {
 		MusicDir:              envOr("MUSIC_DIR", "/music"),
 		Version:               version,
 		AccessToken:           os.Getenv("ACCESS_TOKEN"),
+		AlbumTokens:           envMap("ALBUM_ACCESS_TOKENS"),
 		AuthProxyHeader:       os.Getenv("AUTH_PROXY_HEADER"),
 		NotifyURL:             os.Getenv("NOTIFY_URL"),
 		BruteForceThreshold:   envInt("NOTIFY_BRUTE_FORCE_THRESHOLD", 20),
@@ -82,6 +83,31 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return i
+}
+
+// envMap parses comma-separated key=value pairs from an environment variable.
+func envMap(key string) map[string]string {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	m := make(map[string]string)
+	for _, pair := range strings.Split(v, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		k, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		value = strings.TrimSpace(value)
+		if k != "" && value != "" {
+			m[k] = value
+		}
+	}
+	return m
 }
 
 // loadDotEnv reads KEY=VALUE pairs from path and sets them in the environment,

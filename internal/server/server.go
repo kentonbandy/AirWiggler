@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ type Server struct {
 	defaultQuality  string
 	version         string
 	accessToken     string
+	albumTokens     map[string]string
 	authProxyHeader string
 	cookieSecure    bool
 
@@ -47,6 +49,7 @@ type Config struct {
 	Version               string
 	MusicDir              string
 	AccessToken           string
+	AlbumTokens           map[string]string
 	AuthProxyHeader       string
 	NotifyURL             string
 	BruteForceThreshold   int
@@ -65,6 +68,7 @@ func New(cfg Config, webFS fs.FS) *Server {
 		defaultQuality:      cfg.DefaultQuality,
 		version:             cfg.Version,
 		accessToken:         cfg.AccessToken,
+		albumTokens:         cfg.AlbumTokens,
 		authProxyHeader:     cfg.AuthProxyHeader,
 		cookieSecure:        cfg.CookieSecure,
 		notifier:            newNotifier(cfg.NotifyURL),
@@ -100,10 +104,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/library", s.handleLibrary)
 	mux.HandleFunc("/api/rescan", s.handleRescan)
+	mux.HandleFunc("/api/share", s.handleShare)
 	mux.HandleFunc("/api/art/", s.handleArt)
 
 	// Serve audio files and file-based cover art directly from the music dir.
-	mux.Handle("/music/", http.StripPrefix("/music/", http.FileServer(http.Dir(s.musicDir))))
+	mux.HandleFunc("/music/", s.handleMusic)
 
 	// Serve embedded frontend. Force revalidation on every request so that
 	// browsers never serve stale JS/CSS after a container update.
@@ -121,7 +126,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		authHandler = headerAuthMiddleware(s.authProxyHeader, mux)
 	default:
-		authHandler = tokenMiddleware(s.accessToken, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux)
+		authHandler = tokenMiddleware(s.accessToken, s.albumTokens, s.cookieSecure, s.notifier, s.bruteForceCounter, s.authGrantCounter, s.bruteForceThreshold, s.authGrantThreshold, mux)
 	}
 	return securityHeaders(authHandler)
 }
@@ -190,16 +195,85 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	lib := s.library
 	s.mu.Unlock()
 
+	if albumID := albumScope(r); albumID != "" {
+		filtered := &model.Library{}
+		for _, album := range lib.Albums {
+			if album.ID == albumID {
+				filtered.Albums = append(filtered.Albums, album)
+				break
+			}
+		}
+		lib = filtered
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(lib); err != nil {
 		log.Printf("server: encode library: %v", err)
 	}
 }
 
+// handleShare serves GET /api/share?album=<id>. Only full-library sessions may
+// generate share links.
+func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if albumScope(r) != "" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	albumID := r.URL.Query().Get("album")
+	if albumID == "" {
+		http.Error(w, "missing album", http.StatusBadRequest)
+		return
+	}
+
+	base := externalBaseURL(r)
+	albumOnlyLink := ""
+	if token, ok := albumTokenFor(albumID, s.accessToken, s.albumTokens); ok {
+		albumOnlyLink = base + "/?album=" + url.QueryEscape(albumID) + "&token=" + url.QueryEscape(token)
+	}
+
+	fullAccessLink := base + "/#album/" + url.PathEscape(albumID)
+	if s.accessToken != "" {
+		fullAccessLink = base + "/?album=" + url.QueryEscape(albumID) + "&scope=full&token=" + url.QueryEscape(s.accessToken)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(struct {
+		AlbumOnlyLink  string `json:"albumOnlyLink,omitempty"`
+		FullAccessLink string `json:"fullAccessLink"`
+	}{
+		AlbumOnlyLink:  albumOnlyLink,
+		FullAccessLink: fullAccessLink,
+	})
+}
+
+func externalBaseURL(r *http.Request) string {
+	scheme := r.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		scheme = "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	return scheme + "://" + host
+}
+
 // handleRescan serves POST /api/rescan.
 func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if albumScope(r) != "" {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -222,6 +296,76 @@ func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"started"}`))
 }
 
+// handleMusic serves files under /music/. Album-scoped sessions may only fetch
+// files belonging to their album.
+func (s *Server) handleMusic(w http.ResponseWriter, r *http.Request) {
+	if scopedAlbum := albumScope(r); scopedAlbum != "" {
+		s.mu.Lock()
+		var allowedPrefix string
+		for i := range s.library.Albums {
+			if s.library.Albums[i].ID == scopedAlbum {
+				allowedPrefix = albumMusicPrefix(&s.library.Albums[i])
+				break
+			}
+		}
+		s.mu.Unlock()
+
+		if allowedPrefix == "" || !pathWithinPrefix(r.URL.EscapedPath(), allowedPrefix) {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
+	http.StripPrefix("/music/", http.FileServer(http.Dir(s.musicDir))).ServeHTTP(w, r)
+}
+
+func albumMusicPrefix(album *model.Album) string {
+	for _, q := range album.QualityOrder {
+		for _, t := range album.Qualities[q].Tracks {
+			if prefix := musicAlbumPrefix(t.URL); prefix != "" {
+				return prefix
+			}
+		}
+	}
+	for _, img := range album.Images {
+		if prefix := musicAlbumPrefix(img); prefix != "" {
+			return prefix
+		}
+	}
+	if prefix := musicAlbumPrefix(album.Art); prefix != "" {
+		return prefix
+	}
+	return ""
+}
+
+func musicAlbumPrefix(path string) string {
+	if !strings.HasPrefix(path, "/music/") {
+		return ""
+	}
+	rest := strings.TrimPrefix(path, "/music/")
+	albumPart, _, _ := strings.Cut(rest, "/")
+	if albumPart == "" {
+		return ""
+	}
+	return "/music/" + albumPart
+}
+
+func pathWithinPrefix(path, prefix string) bool {
+	decodedPath, err := url.PathUnescape(path)
+	if err == nil {
+		path = fileURLPathEscape(decodedPath)
+	}
+	return path == prefix || strings.HasPrefix(path, prefix+"/")
+}
+
+func fileURLPathEscape(path string) string {
+	parts := strings.Split(path, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
+}
+
 // handleArt serves GET /api/art/<id> for albums with embedded cover art.
 func (s *Server) handleArt(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -230,6 +374,10 @@ func (s *Server) handleArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := strings.TrimPrefix(r.URL.Path, "/api/art/")
+	if scopedAlbum := albumScope(r); scopedAlbum != "" && scopedAlbum != id {
+		http.NotFound(w, r)
+		return
+	}
 	if id == "" {
 		http.NotFound(w, r)
 		return

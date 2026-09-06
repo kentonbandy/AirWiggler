@@ -33,6 +33,13 @@
           <h2 id="player-title"></h2>
           <div id="album-actions">
             <button id="album-play-btn" title="Play album from the beginning" aria-label="Play album from the beginning">&#9654;</button>
+            <div id="share-dropdown-wrap">
+              <button id="album-share-btn" title="Share album" aria-label="Share album" aria-expanded="false">&#128279;</button>
+              <div id="share-dropdown" class="hidden">
+                <button id="share-album-only-btn">Copy album-only link</button>
+                <button id="share-full-access-btn">Copy album link with full access</button>
+              </div>
+            </div>
             <div id="quality-selector"></div>
           </div>
         </div>
@@ -78,6 +85,8 @@
 
     </div>
   </div>
+
+  <div id="toast" class="hidden" role="status" aria-live="polite"></div>
 
   <!-- Lightbox -->
   <div id="lightbox" class="hidden">

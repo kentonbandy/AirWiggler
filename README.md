@@ -90,6 +90,7 @@ Add these under **Variables**:
 | `RESCAN_INTERVAL_MINUTES` | `15` | How often to re-scan the music folder automatically. |
 | `COOKIE_SECURE` | `true` | See note below. |
 | `ACCESS_TOKEN` | *(unset)* | Optional, but highly recommended to control access to your library. See [Access Control](#access-control). |
+| `ALBUM_ACCESS_TOKENS` | *(unset)* | Optional album-scoped tokens for sharing access to individual albums only. See [Album-only Sharing](#album-only-sharing). |
 | `AUTH_PROXY_HEADER` | *(unset)* | Header-based auth for use behind an OIDC/SSO reverse proxy. See [Proxy / OIDC Auth](#proxy--oidc-auth). |
 
 #### COOKIE_SECURE
@@ -174,6 +175,25 @@ By default, AirWiggler is open to anyone who can reach the port. If you plan to 
    On first visit, a session cookie is set. After that, bookmarks and direct links work without the token in the URL.
 
 To revoke all active sessions and issue new credentials, see [docs/revoking-access.md](docs/revoking-access.md).
+
+---
+
+## Album Sharing
+
+When viewing an album, click the share icon to copy either:
+
+- **Album-only link** — grants access to only that album. The user will only see that album in the library and can only fetch media/artwork files from that album.
+- **Album link with full access** — opens that album, but grants normal full-library access.
+
+If `ACCESS_TOKEN` is set, AirWiggler can generate both link types automatically. Album-only tokens are derived from your full access token and the album ID, so rotating `ACCESS_TOKEN` also revokes generated album-only links.
+
+Advanced: you can override or provide static album-only tokens with `ALBUM_ACCESS_TOKENS`:
+
+```env
+ALBUM_ACCESS_TOKENS=album-id-1=random-token-1,album-id-2=random-token-2
+```
+
+`ACCESS_TOKEN` can still be used at the same time for full-library access.
 
 ---
 
