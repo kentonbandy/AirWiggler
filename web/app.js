@@ -138,6 +138,7 @@ function openAlbum(album, pushState = true) {
 
   renderQualitySelector();
   renderTrackList();
+  updateAlbumPlayButton();
   if (pushState) history.pushState({ albumId: album.id }, '', '#album/' + album.id);
 }
 
@@ -206,9 +207,24 @@ function renderTrackList() {
   }
 }
 
+function toggleAlbumPlaybackFromView() {
+  if (!viewAlbum) return;
+
+  const isViewingCurrentAlbum = viewAlbum.id === currentAlbum?.id;
+  if (isViewingCurrentAlbum && audio.src) {
+    togglePlay();
+    return;
+  }
+
+  currentAlbum = viewAlbum;
+  currentQuality = viewQuality;
+  updateNowPlayingBadge();
+  playTrack(0);
+}
+
 function playTrackFromView(index) {
   // Sync playing state from the viewed album before playing
-  if (viewAlbum.id !== currentAlbum?.id) {
+  if (viewAlbum.id !== currentAlbum?.id || viewQuality !== currentQuality) {
     currentAlbum = viewAlbum;
     currentQuality = viewQuality;
     updateNowPlayingBadge();
@@ -346,6 +362,17 @@ function updateTrackHighlight() {
 
 function updatePlayButton() {
   document.getElementById('play-btn').textContent = audio.paused ? '\u25b6' : '\u23f8';
+  updateAlbumPlayButton();
+}
+
+function updateAlbumPlayButton() {
+  const btn = document.getElementById('album-play-btn');
+  const isViewingCurrentAlbum = viewAlbum?.id === currentAlbum?.id;
+  const isPlayingViewedAlbum = isViewingCurrentAlbum && !audio.paused;
+  btn.textContent = isPlayingViewedAlbum ? '\u23f8' : '\u25b6';
+  btn.title = isPlayingViewedAlbum ? 'Pause album' : 'Play album from the beginning';
+  btn.setAttribute('aria-label', btn.title);
+  btn.classList.toggle('playing', isPlayingViewedAlbum);
 }
 
 function updateNowPlayingBadge() {
@@ -357,6 +384,7 @@ function updateNowPlayingBadge() {
 // ── Button event listeners ────────────────────────────────────────────────
 
 document.getElementById('back-btn').addEventListener('click', showLibrary);
+document.getElementById('album-play-btn').addEventListener('click', toggleAlbumPlaybackFromView);
 document.getElementById('prev-btn').addEventListener('click', prevTrack);
 document.getElementById('play-btn').addEventListener('click', togglePlay);
 document.getElementById('stop-btn').addEventListener('click', stopPlayback);
