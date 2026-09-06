@@ -395,6 +395,10 @@ function updateNowPlayingBadge() {
 
 // ── Button event listeners ────────────────────────────────────────────────
 
+document.getElementById('site-title').addEventListener('click', e => {
+  e.preventDefault();
+  showLibrary();
+});
 document.getElementById('back-btn').addEventListener('click', showLibrary);
 document.getElementById('album-play-btn').addEventListener('click', toggleAlbumPlaybackFromView);
 document.getElementById('prev-btn').addEventListener('click', prevTrack);

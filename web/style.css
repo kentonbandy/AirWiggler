@@ -47,17 +47,26 @@ header {
 header > .header-inner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 14px 24px;
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+  position: relative;
+}
+
+#back-btn {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 #site-title {
+  color: inherit;
   font-size: 1.2rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+  text-decoration: none;
 }
 
 /* Buttons */
