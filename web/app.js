@@ -3,6 +3,11 @@ const audioPlayers = [document.getElementById('audio'), new Audio()];
 let audio = audioPlayers[0];
 audioPlayers[1].preload = 'auto';
 
+// Start the preloaded next track slightly before the browser reports `ended`.
+// This trades a tiny cut-off at the end of the current track for a smoother
+// transition with HTMLAudioElement playback.
+const NEXT_TRACK_HANDOFF_SECONDS = 0.275;
+
 let library = null;
 let currentAlbum = null;   // album whose audio is loaded/playing
 let currentQuality = 'medium';
@@ -583,6 +588,16 @@ for (const player of audioPlayers) {
   player.addEventListener('timeupdate', () => {
     if (player !== audio) return;
     if (!audio.duration || isNaN(audio.duration)) return;
+
+    const remaining = audio.duration - audio.currentTime;
+    const tracks = currentAlbum?.qualities[currentQuality]?.tracks || [];
+    if (!audio.paused &&
+        document.getElementById('autoplay-toggle').checked &&
+        currentTrackIndex < tracks.length - 1 &&
+        remaining > 0 && remaining <= NEXT_TRACK_HANDOFF_SECONDS) {
+      if (playPreloadedNextTrack()) return;
+    }
+
     const pct = (audio.currentTime / audio.duration) * 100;
     document.getElementById('seek-bar').value = pct;
     document.getElementById('time-current').textContent = formatDuration(audio.currentTime);
