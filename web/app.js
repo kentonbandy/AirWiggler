@@ -38,8 +38,20 @@ async function fetchLibrary() {
     const data = await fetch('/api/library').then(r => r.json());
     library = data;
     renderLibrary(data.albums || []);
+    restoreViewFromLocation();
   } catch (e) {
     console.error('Failed to load library:', e);
+  }
+}
+
+function restoreViewFromLocation() {
+  const hash = location.hash;
+  if (!hash || hash === '#') return;
+
+  if (hash.startsWith('#album/') && library) {
+    const id = hash.slice('#album/'.length);
+    const album = library.albums.find(a => a.id === id);
+    if (album) openAlbum(album, false);
   }
 }
 
