@@ -4,6 +4,15 @@ Do you love it when air wiggles your ear bones? Are you sick of free hosting sol
 
 AirWiggler is a self-hosted music library and player in a single Docker container. Point it at a folder of music, open a browser, and play. Supports hosting multiple levels of quality so users can select the best option for their connection. Minimal configuration required.
 
+Features include:
+
+- Browser-based album library and music player
+- Multiple quality tiers per album, selected from folder names
+- File-based cover art, extra album images, and embedded art fallback
+- Album sharing links, including album-only scoped access when `ACCESS_TOKEN` is configured
+- Optional shared-token access control or proxy/OIDC header authentication
+- Optional ntfy notifications for suspicious authentication activity
+
 Designed for home servers running [Unraid](https://unraid.net/), but works with any container runtime that can pull from Docker Hub.
 
 Configurable to have no security, an access token (only those with the link can access), or to respect OIDC auth headers.
@@ -90,7 +99,7 @@ Add these under **Variables**:
 | `RESCAN_INTERVAL_MINUTES` | `15` | How often to re-scan the music folder automatically. |
 | `COOKIE_SECURE` | `true` | See note below. |
 | `ACCESS_TOKEN` | *(unset)* | Optional, but highly recommended to control access to your library. See [Access Control](#access-control). |
-| `ALBUM_ACCESS_TOKENS` | *(unset)* | Optional album-scoped tokens for sharing access to individual albums only. See [Album-only Sharing](#album-only-sharing). |
+| `ALBUM_ACCESS_TOKENS` | *(unset)* | Optional album-scoped tokens for sharing access to individual albums only. See [Album Sharing](#album-sharing). |
 | `AUTH_PROXY_HEADER` | *(unset)* | Header-based auth for use behind an OIDC/SSO reverse proxy. See [Proxy / OIDC Auth](#proxy--oidc-auth). |
 
 #### COOKIE_SECURE
@@ -218,3 +227,9 @@ curl -X POST http://localhost:8080/api/rescan
 ## FLAC Compatibility
 
 FLAC playback requires browser support. If your browser does not support FLAC (notably Safari), a warning banner will appear and you can switch to the `medium` quality tier instead.
+
+---
+
+## Technical Notes
+
+For release/build notes, including Docker image versioning and frontend cache-busting, see [docs/development.md](docs/development.md).
