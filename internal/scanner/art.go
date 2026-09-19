@@ -10,7 +10,10 @@ import (
 )
 
 // rootArtNames are checked in order in the album root directory.
-var rootArtNames = []string{"cover.jpg", "folder.jpg", "cover.png"}
+var rootArtNames = []string{
+	"cover.jpg", "cover.jpeg", "cover.png", "cover.gif", "cover.webp",
+	"folder.jpg", "folder.jpeg", "folder.png", "folder.gif", "folder.webp",
+}
 
 // resolveArtFile checks for image files in the album root and quality subdirs.
 func resolveArtFile(albumDir string, subDirs []string) string {

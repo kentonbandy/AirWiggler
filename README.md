@@ -50,7 +50,7 @@ Every direct subfolder of `/music` is treated as one album or collection. Beyond
 
 **Supported audio formats** — .flac, .mp3, .wav, .m4a, .aac, .ogg, .opus, .aif, .aiff
 
-**Cover art** — `cover.jpg` (or `folder.jpg` / `cover.png`) in the album folder is used as the album art. Additional images in the folder are also viewable. Embedded art in the first audio track is used as a fallback.
+**Cover art** — `cover.*` or `folder.*` (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`) in the album folder is used as the album art. Additional images in the folder are also viewable. Embedded art in the first audio track is used as a fallback.
 
 Tracks are sorted by filename; titles come from embedded tags (Vorbis/ID3) and fall back to the filename.
 

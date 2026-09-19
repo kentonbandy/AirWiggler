@@ -6,7 +6,7 @@ audioPlayers[1].preload = 'auto';
 // Start the preloaded next track slightly before the browser reports `ended`.
 // This trades a tiny cut-off at the end of the current track for a smoother
 // transition with HTMLAudioElement playback.
-const NEXT_TRACK_HANDOFF_SECONDS = 0.275;
+const NEXT_TRACK_HANDOFF_SECONDS = 0.235;
 
 let library = null;
 let currentAlbum = null;   // album whose audio is loaded/playing
