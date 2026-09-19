@@ -3,11 +3,15 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"html"
 	"io"
 	"io/fs"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -106,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/rescan", s.handleRescan)
 	mux.HandleFunc("/api/share", s.handleShare)
 	mux.HandleFunc("/api/art/", s.handleArt)
+	mux.HandleFunc("/album/", s.handleAlbumRoute)
 
 	// Serve audio files and file-based cover art directly from the music dir.
 	mux.HandleFunc("/music/", s.handleMusic)
@@ -231,14 +236,15 @@ func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	base := externalBaseURL(r)
+	albumPath := "/album/" + url.PathEscape(albumID)
 	albumOnlyLink := ""
 	if token, ok := albumTokenFor(albumID, s.accessToken, s.albumTokens); ok {
-		albumOnlyLink = base + "/?album=" + url.QueryEscape(albumID) + "&token=" + url.QueryEscape(token)
+		albumOnlyLink = base + albumPath + "?token=" + url.QueryEscape(token)
 	}
 
-	fullAccessLink := base + "/#album/" + url.PathEscape(albumID)
+	fullAccessLink := base + albumPath
 	if s.accessToken != "" {
-		fullAccessLink = base + "/?album=" + url.QueryEscape(albumID) + "&scope=full&token=" + url.QueryEscape(s.accessToken)
+		fullAccessLink = base + albumPath + "?scope=full&token=" + url.QueryEscape(s.accessToken)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -264,6 +270,173 @@ func externalBaseURL(r *http.Request) string {
 		host = r.Host
 	}
 	return scheme + "://" + host
+}
+
+// handleAlbumRoute serves album-specific HTML with Open Graph metadata, and
+// token-validated album art for social previews.
+func (s *Server) handleAlbumRoute(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/art") {
+		s.handleAlbumPreviewArt(w, r)
+		return
+	}
+	s.handleAlbumPage(w, r)
+}
+
+func (s *Server) handleAlbumPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	albumID := albumIDFromPath(r.URL.Path)
+	if albumID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	album, ok := s.findAlbum(albumID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if scopedAlbum := albumScope(r); scopedAlbum != "" && scopedAlbum != albumID {
+		http.NotFound(w, r)
+		return
+	}
+
+	f, err := s.webFS.Open("index.html")
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	body, err := io.ReadAll(f)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	v := s.version
+	body = bytes.ReplaceAll(body, []byte(`href="style.css"`), []byte(`href="/style.css?v=`+v+`"`))
+	body = bytes.ReplaceAll(body, []byte(`src="app.js"`), []byte(`src="/app.js?v=`+v+`"`))
+	body = bytes.ReplaceAll(body, []byte(`href="style.css?v=`), []byte(`href="/style.css?v=`))
+	body = bytes.ReplaceAll(body, []byte(`src="app.js?v=`), []byte(`src="/app.js?v=`))
+
+	pageURL := externalBaseURL(r) + r.URL.RequestURI()
+	artURL := ""
+	if album.Art != "" || len(album.ArtBytes) > 0 {
+		artURL = externalBaseURL(r) + "/album/" + url.PathEscape(albumID) + "/art"
+		if r.URL.RawQuery != "" {
+			artURL += "?" + r.URL.RawQuery
+		}
+	}
+	description := album.Title
+	if len(album.QualityOrder) > 0 {
+		description += " — " + strings.Join(album.QualityOrder, ", ")
+	}
+	meta := albumOpenGraphMeta(s.siteTitle, album.Title, description, pageURL, artURL)
+	body = bytes.Replace(body, []byte("<head>"), []byte("<head>\n"+meta), 1)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write(body)
+}
+
+func albumOpenGraphMeta(siteTitle, title, description, pageURL, artURL string) string {
+	lines := []string{
+		`<meta property="og:site_name" content="` + html.EscapeString(siteTitle) + `">`,
+		`<meta property="og:type" content="music.album">`,
+		`<meta property="og:title" content="` + html.EscapeString(title) + `">`,
+		`<meta property="og:description" content="` + html.EscapeString(description) + `">`,
+		`<meta property="og:url" content="` + html.EscapeString(pageURL) + `">`,
+	}
+	if artURL != "" {
+		lines = append(lines, `<meta property="og:image" content="`+html.EscapeString(artURL)+`">`)
+	}
+	lines = append(lines, `<meta name="twitter:card" content="summary_large_image">`)
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func (s *Server) handleAlbumPreviewArt(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	albumID := albumIDFromPath(r.URL.Path)
+	if albumID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	album, ok := s.findAlbum(albumID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if scopedAlbum := albumScope(r); scopedAlbum != "" && scopedAlbum != albumID {
+		http.NotFound(w, r)
+		return
+	}
+
+	if len(album.ArtBytes) > 0 {
+		mimeType := album.ArtMIME
+		if mimeType == "" {
+			mimeType = imageContentType("", album.ArtBytes)
+		}
+		w.Header().Set("Content-Type", mimeType)
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		if r.Method != http.MethodHead {
+			w.Write(album.ArtBytes)
+		}
+		return
+	}
+
+	if !strings.HasPrefix(album.Art, "/music/") {
+		http.NotFound(w, r)
+		return
+	}
+	relURL := strings.TrimPrefix(album.Art, "/music/")
+	rel, err := url.PathUnescape(relURL)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	path := filepath.Clean(filepath.Join(s.musicDir, filepath.FromSlash(rel)))
+	root := filepath.Clean(s.musicDir)
+	if path != root && !strings.HasPrefix(path, root+string(os.PathSeparator)) {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", imageContentType(path, data))
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if r.Method != http.MethodHead {
+		w.Write(data)
+	}
+}
+
+func imageContentType(path string, data []byte) string {
+	if len(data) >= 12 && string(data[0:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	if path != "" {
+		if t := mime.TypeByExtension(strings.ToLower(filepath.Ext(path))); t != "" {
+			return t
+		}
+	}
+	return http.DetectContentType(data)
+}
+
+func (s *Server) findAlbum(id string) (*model.Album, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.library.Albums {
+		if s.library.Albums[i].ID == id {
+			return &s.library.Albums[i], true
+		}
+	}
+	return nil, false
 }
 
 // handleRescan serves POST /api/rescan.

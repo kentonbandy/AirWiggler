@@ -194,7 +194,7 @@ When viewing an album, click the share icon to copy either:
 - **Album-only link** — grants access to only that album. The user will only see that album in the library and can only fetch media/artwork files from that album.
 - **Album link with full access** — opens that album, but grants normal full-library access.
 
-If `ACCESS_TOKEN` is set, AirWiggler can generate both link types automatically. Album-only tokens are derived from your full access token and the album ID, so rotating `ACCESS_TOKEN` also revokes generated album-only links.
+If `ACCESS_TOKEN` is set, AirWiggler can generate both link types automatically. Shared album URLs include server-rendered Open Graph metadata so apps like Discord can show album-title/art previews. Album-only tokens are derived from your full access token and the album ID, so rotating `ACCESS_TOKEN` also revokes generated album-only links.
 
 Advanced: you can override or provide static album-only tokens with `ALBUM_ACCESS_TOKENS`:
 

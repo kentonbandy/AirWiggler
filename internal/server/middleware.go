@@ -32,23 +32,37 @@ func tokenMiddleware(token string, albumTokens map[string]string, cookieSecure b
 		// Token exchange:
 		//   /?token=<value>                  grants full-library access
 		//   /?album=<id>&token=<value>       grants access to one album
-		if r.URL.Path == "/" {
-			if provided := r.URL.Query().Get("token"); provided != "" {
-				albumID := r.URL.Query().Get("album")
-				if albumID != "" && r.URL.Query().Get("scope") != "full" {
-					if expected, ok := albumTokenFor(albumID, token, albumTokens); ok && secureEqual(provided, expected) {
+		//   /album/<id>?token=<value>        grants access and serves preview HTML
+		if provided := r.URL.Query().Get("token"); provided != "" && tokenExchangePath(r.URL.Path) {
+			previewArtOnly := strings.HasPrefix(r.URL.Path, "/album/") && strings.HasSuffix(r.URL.Path, "/art")
+			albumID := r.URL.Query().Get("album")
+			if albumID == "" {
+				albumID = albumIDFromPath(r.URL.Path)
+			}
+			if albumID != "" && r.URL.Query().Get("scope") != "full" {
+				if expected, ok := albumTokenFor(albumID, token, albumTokens); ok && secureEqual(provided, expected) {
+					if !previewArtOnly {
 						setSessionCookie(w, scopedAlbumCookieValue(albumID, provided), cookieSecure)
 						recordAuthGrant(n, agCounter, agThreshold)
+					}
+					if r.URL.Path == "/" {
 						http.Redirect(w, r, "/#album/"+url.PathEscape(albumID), http.StatusFound)
 						return
 					}
-					invalidToken(w, n, bfCounter, bfThreshold)
+					ctx := context.WithValue(r.Context(), albumScopeContextKey{}, albumID)
+					h.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
+				invalidToken(w, n, bfCounter, bfThreshold)
+				return
+			}
 
-				if token != "" && secureEqual(provided, token) {
+			if token != "" && secureEqual(provided, token) {
+				if !previewArtOnly {
 					setSessionCookie(w, token, cookieSecure)
 					recordAuthGrant(n, agCounter, agThreshold)
+				}
+				if r.URL.Path == "/" {
 					redirectTo := "/"
 					if albumID != "" {
 						redirectTo = "/#album/" + url.PathEscape(albumID)
@@ -56,10 +70,12 @@ func tokenMiddleware(token string, albumTokens map[string]string, cookieSecure b
 					http.Redirect(w, r, redirectTo, http.StatusFound)
 					return
 				}
-
-				invalidToken(w, n, bfCounter, bfThreshold)
+				h.ServeHTTP(w, r)
 				return
 			}
+
+			invalidToken(w, n, bfCounter, bfThreshold)
+			return
 		}
 
 		// All other requests: require a valid session cookie.
@@ -82,6 +98,26 @@ func tokenMiddleware(token string, albumTokens map[string]string, cookieSecure b
 
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	})
+}
+
+func tokenExchangePath(p string) bool {
+	return p == "/" || strings.HasPrefix(p, "/album/")
+}
+
+func albumIDFromPath(p string) string {
+	if !strings.HasPrefix(p, "/album/") {
+		return ""
+	}
+	rest := strings.TrimPrefix(p, "/album/")
+	if rest == "" {
+		return ""
+	}
+	id, _, _ := strings.Cut(rest, "/")
+	id, err := url.PathUnescape(id)
+	if err != nil {
+		return ""
+	}
+	return id
 }
 
 func setSessionCookie(w http.ResponseWriter, value string, secure bool) {

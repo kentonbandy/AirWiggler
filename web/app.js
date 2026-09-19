@@ -55,13 +55,29 @@ async function fetchLibrary() {
 }
 
 function restoreViewFromLocation() {
+  let id = '';
+  let cameFromAlbumPath = false;
   const hash = location.hash;
-  if (!hash || hash === '#') return;
+  if (hash && hash !== '#' && hash.startsWith('#album/')) {
+    id = hash.slice('#album/'.length);
+  } else if (location.pathname.startsWith('/album/')) {
+    try {
+      id = decodeURIComponent(location.pathname.slice('/album/'.length).split('/')[0]);
+      cameFromAlbumPath = true;
+    } catch (e) {
+      console.warn('Invalid album URL:', e);
+    }
+  }
 
-  if (hash.startsWith('#album/') && library) {
-    const id = hash.slice('#album/'.length);
+  if (id && library) {
     const album = library.albums.find(a => a.id === id);
-    if (album) openAlbum(album, false);
+    if (album) {
+      openAlbum(album, false);
+      // The server-rendered /album/<id>?token=... URL is for crawlers and
+      // initial token exchange. Once the browser has a session cookie, move
+      // back to the normal hash route and remove any token from the address bar.
+      if (cameFromAlbumPath) history.replaceState({ albumId: album.id }, '', '/#album/' + encodeURIComponent(album.id));
+    }
   }
 }
 
